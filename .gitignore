@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+*.pyo
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+
+# MLflow logs (용량이 큼)
+mlruns/
+
+# 대용량 데이터셋 파일
+korean_base_dataset.json
+korean_data/
+dataset_stats.json
+*.json.gz
+
+# 분할된 대용량 파일들
+solar-part-*
+*.tar.gz
+
+# 임시/테스트 파일들
+comprehensive_checkpoint_test.py
+stress_test_checkpoints.py
+compare_checkpoints.py
+fixed_checkpoint_test.py
+training_analysis.py
+
+# 결과 파일들 (선택적)
+comprehensive_test_results.json
+fixed_test_results.json
+
+# 체크포인트 중간 파일들 (큰 파일들)
+solar-korean-output/*/optimizer.pt
+solar-korean-output/*/scheduler.pt
+solar-korean-output/*/rng_state.pth
+
+# 로그 파일
+*.log
+logs/
