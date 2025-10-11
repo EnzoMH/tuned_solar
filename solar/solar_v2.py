@@ -48,7 +48,7 @@ class SOLARFineTuningConfig:
     max_samples: Optional[int] = 100000  # 100K로 샘플링 (과적합 방지 + 속도 향상)
     
     # 출력
-    output_dir: str = "/home/work/solar-korean-quality-output"
+    output_dir: str = "/home/work/tesseract/solar-korean-quality-output"
     
     # LoRA 설정 (자연스러운 응답을 위한 최적화)
     lora_r: int = 64

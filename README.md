@@ -1,105 +1,138 @@
-# EEVE-Korean-Instruct Custom Fine-tuning
+# EEVE-Korean-Instruct Custom Fine-tuning 
 
-**EEVE-Korean-Instruct-10.8B** 모델을 한국어 커스텀 instruction 데이터로 파인튜닝한 프로젝트입니다. 
-반말 질문에도 존댓말로 정중하게 답변하도록 학습되었습니다.
+**EEVE-Korean-Instruct-10.8B** 모델, 한국어 커스텀 instruction 데이터로 파인튜닝한 프로젝트
 
-## 프로젝트 개요
+**Training Complete & HuggingFace Deployment complete**
 
-EEVE는 이미 **한국어와 영어에 최적화**되어 있어, Light CPT(Continued Pre-training) 없이 바로 Instruction Tuning이 가능합니다.
-- ✅ **40,960 vocab** (EXAONE 토크나이저 통합)
-- ✅ **한영 balanced** (이미 최적화됨)
-- ✅ **8K context** 지원
-- ✅ **빠른 학습** (2 epoch면 충분)
+## Project Outline
 
-## 모델 정보
+- **40,960 vocab** 
+- **한영 balanced** 
+- **8K context** 지원
+- **Unsloth 가속** 
 
-- **베이스 모델**: [yanolja/EEVE-Korean-Instruct-10.8B-v1.0](https://huggingface.co/yanolja/EEVE-Korean-Instruct-10.8B-v1.0)
-- **파인튜닝 방법**: LoRA (Low-Rank Adaptation)
-- **훈련 데이터**: 고품질 한국어 instruction 데이터 (~100K 샘플)
-- **목표**: 반말 질문 → 존댓말 답변 (자연스러운 한국어)
-- **훈련 환경**: KT Cloud H100E (80GB HBM3)
+## Deployed Model
 
-## 훈련 환경 & 설정
+**HuggingFace**: [MyeongHo0621/eeve-vss-smh](https://huggingface.co/MyeongHo0621/eeve-vss-smh)
 
-### 하드웨어
+```python
+from transformers import AutoModelForCausalLM, AutoTokenizer
+
+model = AutoModelForCausalLM.from_pretrained(
+    "MyeongHo0621/eeve-vss-smh",
+    device_map="auto",
+    torch_dtype="auto"
+)
+tokenizer = AutoTokenizer.from_pretrained("MyeongHo0621/eeve-vss-smh")
+```
+
+## Model Information
+
+- **Base Model**: [yanolja/EEVE-Korean-Instruct-10.8B-v1.0](https://huggingface.co/yanolja/EEVE-Korean-Instruct-10.8B-v1.0)
+- **How to fine-tune**: LoRA (r=128, alpha=256) + Unsloth
+- **Data**: 고품질 한국어 instruction 데이터 (~100K 샘플)
+
+## Train envrionment & configuration
+
+### H/W info
 - **GPU**: NVIDIA H100 80GB HBM3
 - **CPU**: 24 cores
 - **RAM**: 192GB
-- **Framework**: PyTorch 2.6, Transformers, PEFT
+- **Framework**: Unsloth + PyTorch 2.8, Transformers 4.56.2
 
-### LoRA 설정
-- **r**: 64 (rank)
-- **alpha**: 128
-- **dropout**: 0.05 (낮게 설정, 이미 instruction-tuned)
+### LoRA configuration 
+- **r**: 128 
+- **alpha**: 256 (alpha = 2 * r)
+- **dropout**: 0.0 (Only 0.0)
 - **target_modules**: q_proj, k_proj, v_proj, o_proj, gate_proj, up_proj, down_proj
+- **use_rslora**: false
 
-### 훈련 하이퍼파라미터
-- **Epochs**: 2
-- **Batch Size**: 4 (per device)
-- **Gradient Accumulation**: 4 (effective batch = 16)
-- **Learning Rate**: 1e-4 (낮게, 이미 잘 학습된 모델)
-- **Max Length**: 2048 tokens
+### Training Hyper Parameter 
+- **Framework**: Unsloth 
+- **Epochs**: 3 
+- **Batch Size**: 8 
+- **Gradient Accumulation**: 2 
+- **Learning Rate**: 1e-4
+- **Max Sequence Length**: 4096 tokens
 - **Warmup Ratio**: 0.05
 - **Weight Decay**: 0.01
 
-### 메모리 최적화
-- **4-bit Quantization**: NF4
-- **Gradient Checkpointing**: 활성화
-- **BF16 Training**: H100E 최적화
-- **예상 메모리**: ~11GB VRAM
+### Memory Optimization
+- **Full Precision Training**
+- **Unsloth Gradient Checkpointing**
+- **BF16 Training**
+- **Peak VRAM**
 
-## 📁 파일 구조
+## Directory tree
 
 ```
 tesseract/
-├── eeve_finetune.py              # 🔥 메인 파인튜닝 스크립트
-├── conv_eeve.py                  # 💬 대화 테스트 스크립트
-├── config.py                     # ⚙️ 설정 파일
-│
-├── korean_large_data/            # 📊 훈련 데이터 (191K)
-│   └── korean_large_dataset.json
-│
-├── eeve-korean-output/           # 💾 훈련 출력
-│   ├── checkpoint-250/           # 첫 체크포인트
-│   ├── checkpoint-500/           # ...
-│   └── final/                    # 최종 모델
-│
-├── datageneration/               # 🏭 WMS Instruction 생성
-│   └── Instruction/
-│
-├── solar/                        # 📦 이전 SOLAR 프로젝트
-└── NATURAL_LLM_STRATEGY.md       # 📖 전략 문서
+├── eeve/                         
+│   ├── README.md                 
+│   ├── 0_unsl_ft.py            # main script
+│   ├── 1_cp_ft.py              # CheckPoint training resume
+│   ├── 2_merg_uplod.py         # Merging and Huggingfacehub upload
+│   ├── 3_test_checkpoint.py    # Checkpoint Test
+│   ├── UNSLOTH_GUIDE.md        # Unsloth Guid
+│   └── quant/                  # Quantizatio Script
+├── datageneration/             # Data generator
+│   └── inst_eeve/              # EEVE instruction data
+└── solar/                      # Project Solar
 ```
 
-## 사용 방법
+## How to use
 
-### 1. 훈련 실행
+### 1. HuggingFace (recommended)
+
+```python
+from transformers import AutoModelForCausalLM, AutoTokenizer
+
+# model load
+model = AutoModelForCausalLM.from_pretrained(
+    "MyeongHo0621/eeve-vss-smh",
+    device_map="auto",
+    torch_dtype="auto"
+)
+tokenizer = AutoTokenizer.from_pretrained("MyeongHo0621/eeve-vss-smh")
+
+# prompt Template
+def create_prompt(user_input):
+    return f"""A chat between a curious user and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the user's questions.
+Human: {user_input}
+Assistant: """
+
+# generating response
+prompt = create_prompt("한국의 수도가 어디야?")
+inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
+outputs = model.generate(
+    **inputs,
+    max_new_tokens=512,
+    temperature=0.3,
+    top_p=0.85,
+    do_sample=True
+)
+response = tokenizer.decode(outputs[0][len(inputs['input_ids'][0]):], skip_special_tokens=True)
+print(response)
+```
+
+### 2. Re-Training from Checkpoint(Optional)
 
 ```bash
-# 백그라운드로 훈련 시작
-nohup python eeve_finetune.py > training_eeve.log 2>&1 &
+cd eeve
 
-# 로그 실시간 확인
-tail -f training_eeve.log
+# from start
+python eeve_finetune_unsloth.py
 
-# 훈련 상태 확인
-ps aux | grep eeve_finetune
+# from check_point
+python 1_eeve_finetune_from_checkpoint.py
+
+# checkpoint test
+python 3_test_checkpoint.py --compare \
+  /path/to/checkpoint-1 \
+  /path/to/checkpoint-2
 ```
 
-### 2. 대화 테스트 (체크포인트)
-
-```bash
-# 첫 체크포인트 테스트 (반말→존댓말 검증)
-python conv_eeve.py --model-path /home/work/eeve-korean-output/checkpoint-250
-
-# 최종 모델 테스트
-python conv_eeve.py --model-path /home/work/eeve-korean-output/final
-
-# 베이스 모델만 테스트
-python conv_eeve.py
-```
-
-### 3️⃣ 수동 모델 로드 (Python API)
+### 3. Model Load (Python API)
 
 #### 기본 로드 (4-bit 양자화)
 ```python
@@ -107,7 +140,7 @@ import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 from peft import PeftModel
 
-# 4bit 양자화 설정 (메모리 절약)
+# 4bit Quantization Configuration 
 bnb_config = BitsAndBytesConfig(
     load_in_4bit=True,
     bnb_4bit_quant_type="nf4",
@@ -115,7 +148,7 @@ bnb_config = BitsAndBytesConfig(
     bnb_4bit_use_double_quant=True
 )
 
-# 베이스 모델 로드
+# Base Model Load
 base_model = AutoModelForCausalLM.from_pretrained(
     "yanolja/EEVE-Korean-Instruct-10.8B-v1.0",
     quantization_config=bnb_config,
@@ -124,14 +157,14 @@ base_model = AutoModelForCausalLM.from_pretrained(
     torch_dtype=torch.bfloat16
 )
 
-# LoRA 어댑터 로드
+# LoRA Adaptor load
 model = PeftModel.from_pretrained(
     base_model, 
     "/home/work/eeve-korean-output/final",
     is_trainable=False
 )
 
-# 토크나이저 로드
+# Tokenizer
 tokenizer = AutoTokenizer.from_pretrained(
     "/home/work/eeve-korean-output/final",
     trust_remote_code=True
@@ -140,10 +173,10 @@ if tokenizer.pad_token is None:
     tokenizer.pad_token = tokenizer.eos_token
 ```
 
-#### 텍스트 생성 (EEVE 프롬프트 템플릿)
+#### Text Generation (EEVE Prompt Template)
 ```python
 def generate_response(user_input, max_tokens=512):
-    # EEVE 공식 프롬프트 템플릿
+    # EEVE Official Prompt Template
     prompt = f"""A chat between a curious user and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the user's questions.
 Human: {user_input}
 Assistant: """
@@ -179,39 +212,29 @@ Assistant: """
     
     return response
 
-# 사용 예시 (반말 질문 → 존댓말 답변)
+# example
 print(generate_response("한국의 수도가 어디야?"))
 print(generate_response("피보나치 수열 설명해봐"))
 ```
 
-## 훈련 목표 및 특징
+## Strategy and Output
 
-### 주요 목표
-1. **반말 질문 → 존댓말 답변**: 사용자가 반말로 질문해도 항상 정중한 존댓말로 답변
-2. **자연스러운 한국어**: 번역체가 아닌 자연스러운 한국어 표현
-3. **일관된 품질**: 과적합 방지를 위한 낮은 learning rate와 dropout
+### Strategy
+- **Label Masking**
+- **Prompt Template**
+- **Early Stopping**
+- **Memory Efficiency**
 
-### 데이터 특성
-- **총 샘플**: ~191K (100K 샘플링)
-- **소스**: KoAlpaca, Kullm-v2, Smol Korean Talk, Korean Wiki QA
-- **품질 필터링**: 길이, 특수문자, 반복, 언어 비율 검증
-- **형식**: `{"messages": [{"role": "user", "content": "..."}, {"role": "assistant", "content": "..."}]}`
+### Output
+- **Training time**: ~3 hours (H100E, Unsloth, 6,250 steps)
+- **Memory Usage**: ~26GB VRAM (Peak)
+- **Checkpoint**: 250 steps
+- **Assessment**: 250 steps, eval_loss 
 
-### 훈련 전략
-- **Label Masking**: 사용자 질문 부분은 loss 계산에서 제외, 어시스턴트 답변만 학습
-- **프롬프트 템플릿**: EEVE 공식 템플릿 사용 (일관성 보장)
-- **Early Stopping**: eval_loss 기준 best model 저장
-- **메모리 효율**: 4-bit 양자화 + gradient checkpointing
-
-### 예상 성능 (훈련 중)
-- **훈련 시간**: 6-10시간 (H100E, 100K 샘플, 2 epoch)
-- **메모리 사용**: ~11GB VRAM
-- **체크포인트**: 250 steps마다 저장
-- **평가**: 250 steps마다 eval_loss 측정
 
 ## 기술 상세
 
-### EEVE 프롬프트 템플릿
+### EEVE Prompt Template
 ```python
 prompt = f"""A chat between a curious user and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the user's questions.
 Human: {user_input}
@@ -261,22 +284,21 @@ labels[labels == pad_token_id] = -100  # 패딩 마스킹
 ### ✅ 완료
 - [x] EEVE 모델 선정
 - [x] 데이터 준비 및 정제 (191K → 100K)
-- [x] 훈련 스크립트 작성 (메모리 최적화)
-- [x] 대화 테스트 스크립트
+- [x] Unsloth 기반 훈련 스크립트 작성
 - [x] Label masking 구현
-- [x] 훈련 시작 (진행 중)
-
-### 🔄 진행 중
-- [ ] 훈련 완료 대기 (6-10시간 예상)
-- [ ] 첫 체크포인트 테스트 (반말→존댓말 검증)
-- [ ] 최종 모델 품질 평가
+- [x] 훈련 완료 (3시간, Unsloth 가속)
+- [x] 체크포인트 비교 테스트 (6250 vs 6500)
+- [x] Eval Loss 기준 최적 체크포인트 선택
+- [x] 모델 병합 (LoRA → Full model)
+- [x] **HuggingFace Hub 업로드 완료** ✅
+- [x] 상세 README 작성 (훈련 세부사항)
 
 ### 📋 향후 계획
-- [ ] Hugging Face Hub 업로드
 - [ ] 벤치마크 테스트 (KoBEST, KLUE 등)
+- [ ] 양자화 버전 업로드 (4-bit, 8-bit)
 - [ ] WMS 도메인 데이터 추가 학습
 - [ ] RAG 파이프라인 통합
-- [ ] 성능 최적화 (추론 속도)
+- [ ] 추론 최적화 (vLLM, TensorRT-LLM)
 
 ## 📄 라이선스
 
@@ -293,13 +315,32 @@ labels[labels == pad_token_id] = -100  # 패딩 마스킹
 
 ---
 
+## 핵심 인사이트
+
+### 1. Eval Loss가 최우선 지표
+- Training Loss가 낮아도 Eval Loss가 증가하면 **과적합**
+- checkpoint-6500은 Training Loss 0.561로 매우 낮았지만, Eval Loss 1.5866으로 증가
+- checkpoint-6250이 Eval Loss 1.4604로 **최적 일반화 지점**
+
+### 2. Unsloth의 위력
+- 기존 대비 **2-5배 빠른 훈련**
+- 6,250 steps를 **3시간**만에 완료 (H100E)
+- 메모리 효율적: Full precision에도 26GB만 사용
+
+### 3. 체크포인트 선택의 중요성
+- 무조건 마지막 체크포인트가 좋은 것은 아님
+- Early Stopping 또는 Eval Loss 모니터링 필수
+- 과적합 전 지점을 찾는 것이 핵심
+
 ## 프로젝트 정보
 
 - **시작일**: 2025-10-11
-- **현재 상태**: 훈련 진행 중 (2% 완료)
+- **완료일**: 2025-10-12
+- **현재 상태**: ✅ **훈련 완료 & 배포 완료**
 - **훈련 환경**: KT Cloud H100E (80GB HBM3, 24 cores, 192GB RAM)
-- **예상 완료**: 2025-10-12
-- **최종 업데이트**: 2025-10-11
+- **훈련 시간**: ~3시간 (Unsloth 가속)
+- **배포**: [HuggingFace Hub](https://huggingface.co/MyeongHo0621/eeve-vss-smh)
+- **최종 업데이트**: 2025-10-12
 
 ---
 

@@ -82,3 +82,5 @@ final/
 *.pid
 
 .nfs*
+
+INFERENCE_OPTIMIZATION_PLAN.md
