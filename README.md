@@ -1,243 +1,306 @@
-# SOLAR-10.7B Korean Fine-tuned Model
+# EEVE-Korean-Instruct Custom Fine-tuning
 
-한국어로 파인튜닝된 SOLAR-10.7B 모델입니다. LoRA 기법을 활용하여 효율적으로 훈련되었으며, 과적합 분석을 통해 최적 체크포인트를 선정했습니다.
+**EEVE-Korean-Instruct-10.8B** 모델을 한국어 커스텀 instruction 데이터로 파인튜닝한 프로젝트입니다. 
+반말 질문에도 존댓말로 정중하게 답변하도록 학습되었습니다.
+
+## 프로젝트 개요
+
+EEVE는 이미 **한국어와 영어에 최적화**되어 있어, Light CPT(Continued Pre-training) 없이 바로 Instruction Tuning이 가능합니다.
+- ✅ **40,960 vocab** (EXAONE 토크나이저 통합)
+- ✅ **한영 balanced** (이미 최적화됨)
+- ✅ **8K context** 지원
+- ✅ **빠른 학습** (2 epoch면 충분)
 
 ## 모델 정보
 
-- **베이스 모델**: [upstage/SOLAR-10.7B-v1.0](https://huggingface.co/upstage/SOLAR-10.7B-v1.0)
+- **베이스 모델**: [yanolja/EEVE-Korean-Instruct-10.8B-v1.0](https://huggingface.co/yanolja/EEVE-Korean-Instruct-10.8B-v1.0)
 - **파인튜닝 방법**: LoRA (Low-Rank Adaptation)
-- **훈련 데이터**: 한국어 instruction following 데이터셋 (~300,000개 샘플)
-- **훈련 시간**: 약 20시간 42분 (KT Cloud H100E 환경, 3 에포크)
-- **최종 Train Loss**: 0.87 (시작: 1.56)
-- **최적 체크포인트**: checkpoint-1000 (epoch 1.03, eval_loss: 0.089)
+- **훈련 데이터**: 고품질 한국어 instruction 데이터 (~100K 샘플)
+- **목표**: 반말 질문 → 존댓말 답변 (자연스러운 한국어)
+- **훈련 환경**: KT Cloud H100E (80GB HBM3)
 
-## 훈련 환경 & 결과
+## 훈련 환경 & 설정
 
+### 하드웨어
 - **GPU**: NVIDIA H100 80GB HBM3
+- **CPU**: 24 cores
+- **RAM**: 192GB
 - **Framework**: PyTorch 2.6, Transformers, PEFT
-- **배치 크기**: 2 (gradient accumulation steps: 4, effective batch size: 8)
-- **학습률**: 2e-5 (warmup_ratio: 0.1)
-- **LoRA 설정**: r=16, alpha=32, dropout=0.1, target_modules=["gate_proj", "q_proj", "o_proj", "v_proj", "down_proj", "up_proj", "k_proj"]
 
-### 과적합 분석 결과
-- **최적점**: epoch 2.06 (eval_loss: 0.073) 
-- **checkpoint-1000**: epoch 1.03 → 안정적 성능, 과적합 없음 ✅
-- **checkpoint-1385**: epoch 1.37 → 약간의 성능 저하
-- **final**: epoch 3.0 → 과적합으로 인한 품질 저하 ❌
+### LoRA 설정
+- **r**: 64 (rank)
+- **alpha**: 128
+- **dropout**: 0.05 (낮게 설정, 이미 instruction-tuned)
+- **target_modules**: q_proj, k_proj, v_proj, o_proj, gate_proj, up_proj, down_proj
 
-## 파일 구조
+### 훈련 하이퍼파라미터
+- **Epochs**: 2
+- **Batch Size**: 4 (per device)
+- **Gradient Accumulation**: 4 (effective batch = 16)
+- **Learning Rate**: 1e-4 (낮게, 이미 잘 학습된 모델)
+- **Max Length**: 2048 tokens
+- **Warmup Ratio**: 0.05
+- **Weight Decay**: 0.01
+
+### 메모리 최적화
+- **4-bit Quantization**: NF4
+- **Gradient Checkpointing**: 활성화
+- **BF16 Training**: H100E 최적화
+- **예상 메모리**: ~11GB VRAM
+
+## 📁 파일 구조
 
 ```
 tesseract/
-├── solar-korean-output/
-│   └── checkpoint-1000/              # 최적 성능 체크포인트
-│       ├── adapter_model.safetensors  # LoRA 가중치 (241MB)
-│       ├── adapter_config.json       # LoRA 설정
-│       ├── tokenizer.json            # 토크나이저 (3.4MB)
-│       ├── tokenizer.model           # SentencePiece 모델
-│       ├── tokenizer_config.json     # 토크나이저 설정
-│       └── special_tokens_map.json   # 특수 토큰 매핑
+├── eeve_finetune.py              # 🔥 메인 파인튜닝 스크립트
+├── conv_eeve.py                  # 💬 대화 테스트 스크립트
+├── config.py                     # ⚙️ 설정 파일
 │
-├── test_checkpoint_1385_cuda_turbo.py  # CUDA 최적화 테스트 (권장)
-├── dataset_strategy_tester.py         # 데이터셋 분석 도구
-├── solar.py                          # 원본 훈련 스크립트
+├── korean_large_data/            # 📊 훈련 데이터 (191K)
+│   └── korean_large_dataset.json
 │
-├── checkpoint_comparison.json        # 체크포인트 비교 분석
-├── dataset_strategy_analysis.json    # 데이터셋 전략 분석
-└── download-package-huggingface.tar.gz  # HF 업로드용 (223MB)
+├── eeve-korean-output/           # 💾 훈련 출력
+│   ├── checkpoint-250/           # 첫 체크포인트
+│   ├── checkpoint-500/           # ...
+│   └── final/                    # 최종 모델
+│
+├── datageneration/               # 🏭 WMS Instruction 생성
+│   └── Instruction/
+│
+├── solar/                        # 📦 이전 SOLAR 프로젝트
+└── NATURAL_LLM_STRATEGY.md       # 📖 전략 문서
 ```
 
 ## 사용 방법
 
-### 권장: CUDA 터보 테스트 (6배 빠름)
-```bash
-# 바로 실행 가능한 최적화 코드
-python test_checkpoint_1385_cuda_turbo.py
+### 1. 훈련 실행
 
-# 또는 대화형 모드
-python test_checkpoint_1385_cuda_turbo.py chat
+```bash
+# 백그라운드로 훈련 시작
+nohup python eeve_finetune.py > training_eeve.log 2>&1 &
+
+# 로그 실시간 확인
+tail -f training_eeve.log
+
+# 훈련 상태 확인
+ps aux | grep eeve_finetune
 ```
 
-### 수동 모델 로드 (고급 사용자용)
+### 2. 대화 테스트 (체크포인트)
 
-#### 1. 기본 로드 (메모리 24GB+ 필요)
+```bash
+# 첫 체크포인트 테스트 (반말→존댓말 검증)
+python conv_eeve.py --model-path /home/work/eeve-korean-output/checkpoint-250
+
+# 최종 모델 테스트
+python conv_eeve.py --model-path /home/work/eeve-korean-output/final
+
+# 베이스 모델만 테스트
+python conv_eeve.py
+```
+
+### 3️⃣ 수동 모델 로드 (Python API)
+
+#### 기본 로드 (4-bit 양자화)
 ```python
 import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 from peft import PeftModel
+
+# 4bit 양자화 설정 (메모리 절약)
+bnb_config = BitsAndBytesConfig(
+    load_in_4bit=True,
+    bnb_4bit_quant_type="nf4",
+    bnb_4bit_compute_dtype=torch.bfloat16,
+    bnb_4bit_use_double_quant=True
+)
 
 # 베이스 모델 로드
 base_model = AutoModelForCausalLM.from_pretrained(
-    "upstage/SOLAR-10.7B-v1.0",
+    "yanolja/EEVE-Korean-Instruct-10.8B-v1.0",
+    quantization_config=bnb_config,
     device_map="auto",
-    torch_dtype=torch.bfloat16,
-    trust_remote_code=True
-)
-
-# LoRA 어댑터 로드 (checkpoint-1000 권장)
-model = PeftModel.from_pretrained(
-    base_model, 
-    "./solar-korean-output/checkpoint-1000",
+    trust_remote_code=True,
     torch_dtype=torch.bfloat16
 )
 
+# LoRA 어댑터 로드
+model = PeftModel.from_pretrained(
+    base_model, 
+    "/home/work/eeve-korean-output/final",
+    is_trainable=False
+)
+
 # 토크나이저 로드
-tokenizer = AutoTokenizer.from_pretrained("./solar-korean-output/checkpoint-1000")
+tokenizer = AutoTokenizer.from_pretrained(
+    "/home/work/eeve-korean-output/final",
+    trust_remote_code=True
+)
 if tokenizer.pad_token is None:
     tokenizer.pad_token = tokenizer.eos_token
 ```
 
-#### 2. 4bit 양자화 (메모리 12GB+ 권장)
+#### 텍스트 생성 (EEVE 프롬프트 템플릿)
 ```python
-from transformers import BitsAndBytesConfig
-
-# 4bit 양자화 설정
-bnb_config = BitsAndBytesConfig(
-    load_in_4bit=True,
-    bnb_4bit_use_double_quant=True,
-    bnb_4bit_quant_type="nf4",
-    bnb_4bit_compute_dtype=torch.bfloat16
-)
-
-# 베이스 모델 로드 (양자화 적용)
-base_model = AutoModelForCausalLM.from_pretrained(
-    "upstage/SOLAR-10.7B-v1.0",
-    device_map="auto",
-    quantization_config=bnb_config,
-    trust_remote_code=True
-)
-
-model = PeftModel.from_pretrained(base_model, "./solar-korean-output/checkpoint-1000")
-```
-
-#### 3. 텍스트 생성 (최적화된 파라미터)
-```python
-def generate_korean_response(question, max_tokens=200):
-    prompt = f"질문: {question}\n답변:"
+def generate_response(user_input, max_tokens=512):
+    # EEVE 공식 프롬프트 템플릿
+    prompt = f"""A chat between a curious user and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the user's questions.
+Human: {user_input}
+Assistant: """
     
-    inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
+    inputs = tokenizer(
+        prompt,
+        return_tensors="pt",
+        padding=True,
+        truncation=True,
+        max_length=4096
+    )
+    
+    input_length = inputs.input_ids.shape[1]
+    inputs = {k: v.to(model.device) for k, v in inputs.items()}
     
     with torch.no_grad():
         outputs = model.generate(
             **inputs,
             max_new_tokens=max_tokens,
-            temperature=0.3,        # 일관성 있는 답변
-            top_p=0.7,             # 적절한 다양성  
-            top_k=25,              # 토큰 선택 제한
+            temperature=0.7,           # 자연스러운 다양성
+            top_p=0.9,                # Nucleus sampling
+            top_k=50,
+            repetition_penalty=1.1,    # 반복 방지
             do_sample=True,
-            repetition_penalty=1.2, # 반복 방지
-            pad_token_id=tokenizer.eos_token_id,
-            eos_token_id=tokenizer.eos_token_id,
-            use_cache=True
+            pad_token_id=tokenizer.pad_token_id,
+            eos_token_id=tokenizer.eos_token_id
         )
     
     response = tokenizer.decode(
-        outputs[0][inputs.input_ids.shape[1]:], 
+        outputs[0][input_length:], 
         skip_special_tokens=True
     ).strip()
     
     return response
 
-# 사용 예시
-question = "한국의 수도에 대해 설명해주세요."
-answer = generate_korean_response(question)
-print(answer)
+# 사용 예시 (반말 질문 → 존댓말 답변)
+print(generate_response("한국의 수도가 어디야?"))
+print(generate_response("피보나치 수열 설명해봐"))
 ```
 
-## 성능 분석 결과
+## 훈련 목표 및 특징
 
-### 체크포인트별 품질 비교
-- **checkpoint-1000**: 9.6/10 (과적합 없음, 안정적 성능) 
-- **checkpoint-1385**: 9.6/10 (약간의 성능 저하)  
-- **final**: 9.8/10 (과적합으로 인한 실제 품질 저하) 
+### 주요 목표
+1. **반말 질문 → 존댓말 답변**: 사용자가 반말로 질문해도 항상 정중한 존댓말로 답변
+2. **자연스러운 한국어**: 번역체가 아닌 자연스러운 한국어 표현
+3. **일관된 품질**: 과적합 방지를 위한 낮은 learning rate와 dropout
 
-### 패턴별 성능 (checkpoint-1000 기준)
-- **대화형**: 7.0/10 - 자연스러운 한국어 대화 
-- **전문적 질문**: 7.0/10 - 기술/과학 설명 우수
-- **창의적 질문**: 7.0/10 - 상상력 기반 답변
-- **단답형 QA**: 6.8/10 - 팩트 기반 질문 답변
-- **설명형 QA**: 6.6/10 - 상세 설명 (개선 필요)
+### 데이터 특성
+- **총 샘플**: ~191K (100K 샘플링)
+- **소스**: KoAlpaca, Kullm-v2, Smol Korean Talk, Korean Wiki QA
+- **품질 필터링**: 길이, 특수문자, 반복, 언어 비율 검증
+- **형식**: `{"messages": [{"role": "user", "content": "..."}, {"role": "assistant", "content": "..."}]}`
 
-### CUDA 최적화 성능
-- **개별 처리**: 6.84초/질문
-- **배치 처리**: 0.87초/질문 (6배 향상!)
-- **최적 배치 크기**: 5-10개 질문
+### 훈련 전략
+- **Label Masking**: 사용자 질문 부분은 loss 계산에서 제외, 어시스턴트 답변만 학습
+- **프롬프트 템플릿**: EEVE 공식 템플릿 사용 (일관성 보장)
+- **Early Stopping**: eval_loss 기준 best model 저장
+- **메모리 효율**: 4-bit 양자화 + gradient checkpointing
 
-### 권장 생성 파라미터 (검증됨)
+### 예상 성능 (훈련 중)
+- **훈련 시간**: 6-10시간 (H100E, 100K 샘플, 2 epoch)
+- **메모리 사용**: ~11GB VRAM
+- **체크포인트**: 250 steps마다 저장
+- **평가**: 250 steps마다 eval_loss 측정
+
+## 🔍 기술 상세
+
+### EEVE 프롬프트 템플릿
 ```python
-temperature=0.3          # 일관성 있는 답변
-top_p=0.7               # 적절한 다양성
-top_k=25                # 안정적 토큰 선택  
-repetition_penalty=1.2   # 반복 방지
+prompt = f"""A chat between a curious user and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the user's questions.
+Human: {user_input}
+Assistant: """
 ```
 
-## 훈련 과정 & 교훈
+이 템플릿은:
+- EEVE 공식 템플릿 (훈련 시 사용된 것과 동일)
+- 정중한 답변 스타일 유도
+- 일관된 성능 보장
 
-### 훈련 세부사항
-1. **데이터**: ~300,000개 한국어 instruction 샘플
-2. **훈련 시간**: 20시간 42분 (3 에포크)
-3. **Loss 변화**: 1.56 → 0.87 (44% 개선)
-4. **평가 지표**: eval_loss 0.089 (epoch 1.03에서 최적)
-
-### 핵심 발견사항
-- **과적합 발생**: epoch 2.06 이후 성능 저하
-- **최적 중단점**: epoch 1.03 (checkpoint-1000)
-- **early stopping 필요**: 향후 훈련 시 적용 권장
-- **데이터 노이즈**: URL, 특수문자 정제 필요
-
-### 다음 버전 개선 계획
-1. **Early Stopping**: epoch 2.0 근처에서 훈련 중단
-2. **데이터 정제**: URL, HTML 태그 제거  
-3. **학습률 스케줄링**: 2 에포크 후 학습률 감소
-4. **정규화 강화**: dropout, weight decay 증가
-
-## 분석 도구
-
-프로젝트에 포함된 분석 도구들:
-
-- **`test_checkpoint_1385_cuda_turbo.py`**: CUDA 최적화된 추론 테스트 (권장)
-- **`dataset_strategy_tester.py`**: 데이터셋 패턴별 성능 분석
-- **`solar.py`**: 원본 훈련 스크립트 (LoRA + H100 최적화)
-- **분석 결과 JSON**: 체크포인트 비교 및 데이터 전략 결과
-
-## 배포 가이드
-
-### Hugging Face 업로드
-```bash
-# 업로드용 패키지 사용
-tar -xzf download-package-huggingface.tar.gz
-# 이후 Hugging Face Hub에 업로드
+### Label Masking 전략
+```python
+# 프롬프트 부분은 -100으로 마스킹 (loss 계산 제외)
+labels = input_ids.clone()
+labels[:prompt_length] = -100  # 프롬프트 마스킹
+labels[labels == pad_token_id] = -100  # 패딩 마스킹
 ```
 
-### 로컬 서빙
-```bash
-# CUDA 터보로 빠른 로컬 서비스
-python test_checkpoint_1385_cuda_turbo.py chat
-```
+**왜 Label Masking?**
+- 사용자 질문은 학습하지 않음
+- 어시스턴트 답변만 학습
+- 자연스러운 대화 스타일 형성
 
-## 라이선스
+### 메모리 최적화
+1. **4-bit Quantization (NF4)**: 모델 크기 1/4로 축소
+2. **Gradient Checkpointing**: 메모리 사용량 감소
+3. **LoRA**: 전체 파라미터의 ~0.5%만 학습
+4. **BF16 Training**: H100E 하드웨어 최적화
 
-이 프로젝트는 베이스 모델인 [SOLAR-10.7B-v1.0](https://huggingface.co/upstage/SOLAR-10.7B-v1.0)의 라이선스를 따릅니다.
+**결과**: 80GB GPU에서 11GB만 사용!
 
-## 기여
+## 📦 관련 프로젝트
 
-이슈, 개선 제안, PR은 언제든 환영입니다!
+### WMS Instruction Dataset Generator
+`datageneration/Instruction/` 디렉토리에 WMS(창고 관리) 도메인 특화 instruction 데이터 생성 파이프라인이 포함되어 있습니다.
 
-특히 다음 영역에서의 기여를 환영합니다:
-- 데이터 정제 및 품질 개선
-- 새로운 한국어 평가 벤치마크
-- 추론 최적화 및 성능 개선
-- 다양한 도메인별 테스트 케이스
+- **RAG 기반**: FAISS vectorstore 활용
+- **자동 생성**: 질문-답변 페어 자동 생성
+- **도메인 특화**: WMS 관련 전문 용어 및 시나리오
+
+### 이전 SOLAR 프로젝트
+`solar/` 디렉토리에 이전 SOLAR-10.7B 파인튜닝 결과가 보관되어 있습니다.
+
+## 📝 TODO & 로드맵
+
+### ✅ 완료
+- [x] EEVE 모델 선정
+- [x] 데이터 준비 및 정제 (191K → 100K)
+- [x] 훈련 스크립트 작성 (메모리 최적화)
+- [x] 대화 테스트 스크립트
+- [x] Label masking 구현
+- [x] 훈련 시작 (진행 중)
+
+### 🔄 진행 중
+- [ ] 훈련 완료 대기 (6-10시간 예상)
+- [ ] 첫 체크포인트 테스트 (반말→존댓말 검증)
+- [ ] 최종 모델 품질 평가
+
+### 📋 향후 계획
+- [ ] Hugging Face Hub 업로드
+- [ ] 벤치마크 테스트 (KoBEST, KLUE 등)
+- [ ] WMS 도메인 데이터 추가 학습
+- [ ] RAG 파이프라인 통합
+- [ ] 성능 최적화 (추론 속도)
+
+## 📄 라이선스
+
+이 프로젝트는 베이스 모델인 [EEVE-Korean-Instruct-10.8B-v1.0](https://huggingface.co/yanolja/EEVE-Korean-Instruct-10.8B-v1.0)의 라이선스를 따릅니다.
 
 ## Acknowledgments
 
-- **[Upstage](https://huggingface.co/upstage)**: SOLAR-10.7B-v1.0 베이스 모델
-- **KT Cloud**: H100E GPU 인프라 제공  
-- **Hugging Face**: Transformers, PEFT 라이브러리
+- **[Yanolja (EEVE Team)](https://huggingface.co/yanolja)**: EEVE-Korean-Instruct-10.8B 베이스 모델
+- **[LG AI Research (EXAONE)](https://huggingface.co/LGAI-EXAONE)**: EXAONE 토크나이저 (EEVE에 통합)
+- **[Upstage](https://huggingface.co/upstage)**: SOLAR-10.7B 기반 모델
+- **KT Cloud**: H100E GPU 인프라 제공
+- **Hugging Face**: Transformers, PEFT, Datasets 라이브러리
+- **한국어 데이터셋 기여자들**: KoAlpaca, Kullm-v2, Smol Korean Talk 등
 
 ---
-**📅 프로젝트 정보**
-- *훈련 기간*: 2025-09-25 ~ 2025-09-27
-- *총 훈련 시간*: 20시간 42분
-- *훈련 환경*: KT Cloud H100E (80GB HBM3)
-- *최종 업데이트*: 2025-09-30
+
+## 프로젝트 정보
+
+- **시작일**: 2025-10-11
+- **현재 상태**: 훈련 진행 중 (2% 완료)
+- **훈련 환경**: KT Cloud H100E (80GB HBM3, 24 cores, 192GB RAM)
+- **예상 완료**: 2025-10-12
+- **최종 업데이트**: 2025-10-11
+
+---
+
+**Made with ❤️ for Korean NLP Community**
