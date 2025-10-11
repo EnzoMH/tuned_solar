@@ -1,459 +1,534 @@
-# EEVE Fine-tuning & Quantization Pipeline
+# EEVE-Korean-Custom-10.8B
 
-> **EEVE-Korean-Instruct 모델 파인튜닝 및 양자화 파이프라인**
+> 🇰🇷 **Korean Custom Fine-tuning** - Responds politely in formal Korean even to casual questions
 
-이 디렉토리는 EEVE-Korean-Instruct-10.8B 모델의 파인튜닝, 테스트, 양자화를 위한 통합 파이프라인을 제공합니다.
+## English Documentation
 
----
+### Model Overview
 
-## directory structure
+This model is based on [EEVE-Korean-Instruct-10.8B-v1.0](https://huggingface.co/yanolja/EEVE-Korean-Instruct-10.8B-v1.0), fine-tuned with high-quality Korean instruction data using LoRA, and subsequently merged into a standalone model.
 
-```
-eeve/
-├── config.py                    # 파인튜닝 설정 파일
-├── eeve_finetune.py            # 파인튜닝 메인 스크립트
-├── conv_eeve.py                # 대화형 테스트 스크립트
-└── quant/                      # 양자화 관련
-    ├── bnb_4bit.py            # 4-bit 양자화 (저사양용)
-    └── bnb_8bit.py            # 8-bit 양자화 (프로덕션용)
-```
+**Key Features:**
+- High-quality Korean language processing trained on 100K+ instruction samples
+- Extended context support up to 8K tokens
+- Bilingual capabilities supporting both Korean and English
 
----
+### Quick Start
 
-## workflow
-
-```
-1. Fine-tuning (eeve_finetune.py)
-   ↓
-2. Test (conv_eeve.py)
-   ↓
-3. Quantization (quant/bnb_*.py)
-   ↓
-4. Deploy (Hugging Face Hub)
+**Installation:**
+```bash
+pip install transformers torch accelerate
 ```
 
----
-
-## files Explanation
-
-### 1. `config.py`
-
-파인튜닝 설정을 관리하는 설정 파일입니다.
-
-**주요 설정**:
-- **Base Model**: `yanolja/EEVE-Korean-Instruct-10.8B-v1.0`
-- **LoRA Config**: r=64, alpha=128, dropout=0.05
-- **Training**: 2 epochs, batch_size=4, gradient_accumulation=4
-- **Output**: `/home/work/eeve-korean-output`
-
-**수정 가능한 주요 파라미터**:
+**Basic Usage:**
 ```python
-base_model = "yanolja/EEVE-Korean-Instruct-10.8B-v1.0"
-max_samples = 100000
-lora_r = 64
-lora_alpha = 128
-num_train_epochs = 2
-learning_rate = 1e-4
+from transformers import AutoModelForCausalLM, AutoTokenizer
+
+# Load model (no PEFT required)
+model = AutoModelForCausalLM.from_pretrained(
+    "MyeongHo0621/eeve-vss-smh",  
+    device_map="auto",
+    torch_dtype="auto"
+)
+tokenizer = AutoTokenizer.from_pretrained("MyeongHo0621/eeve-vss-smh")
+
+# Prompt template (EEVE format)
+def create_prompt(user_input):
+    return f"""A chat between a curious user and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the user's questions.
+Human: {user_input}
+Assistant: """
+
+# Generate response
+user_input = "Implement Fibonacci sequence in Python"
+prompt = create_prompt(user_input)
+
+inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
+outputs = model.generate(
+    **inputs,
+    max_new_tokens=512,
+    temperature=0.3,
+    top_p=0.85,
+    repetition_penalty=1.0,
+    do_sample=True
+)
+
+response = tokenizer.decode(outputs[0][inputs['input_ids'].shape[1]:], skip_special_tokens=True)
+print(response)
 ```
 
----
-
-### 2. `eeve_finetune.py`
-
-EEVE 모델을 한국어 instruction 데이터셋으로 파인튜닝하는 메인 스크립트입니다.
-
-**주요 기능**:
-- ✅ Label Masking (사용자 입력 부분은 loss 계산 제외)
-- ✅ EEVE 전용 프롬프트 템플릿
-- ✅ 4-bit 양자화 훈련 (QLoRA)
-- ✅ 자동 체크포인트 저장
-- ✅ 반말→존댓말 응답 학습
-
-**사용법**:
-
-```bash
-# 기본 실행 (config.py 설정 사용)
-cd /home/work/tesseract/eeve
-python eeve_finetune.py
-
-# 백그라운드 실행
-nohup python eeve_finetune.py > training.log 2>&1 &
-
-# 훈련 상태 모니터링
-tail -f training.log
-```
-
-**출력**:
-- `/home/work/eeve-korean-output/checkpoint-{N}/`
-- `/home/work/eeve-korean-output/final/`
-
----
-
-### 3. `conv_eeve.py`
-
-파인튜닝된 EEVE 모델과 터미널에서 대화할 수 있는 테스트 스크립트입니다.
-
-**주요 기능**:
-- ✅ 대화형 인터페이스
-- ✅ 자연스러운 응답 생성
-- ✅ LoRA 어댑터 자동 로드
-- ✅ 대화 히스토리 관리
-
-**사용법**:
-
-```bash
-# 기본 실행 (최신 체크포인트 사용)
-python conv_eeve.py
-
-# 특정 체크포인트 테스트
-python conv_eeve.py --checkpoint /home/work/eeve-korean-output/checkpoint-500
-
-# 베이스 모델만 테스트 (어댑터 없이)
-python conv_eeve.py --no-adapter
-```
-
-**예시 대화**:
-```
-User: WMS가 뭐야?
-Assistant: WMS(Warehouse Management System)는 창고 관리 시스템으로, 
-물류 센터의 입출고, 재고 관리, 피킹, 패킹 등의 작업을 효율적으로 
-관리하는 시스템입니다...
-
-User: quit  # 종료
-```
-
----
-
-### 4. `quant/bnb_4bit.py`
-
-**4-bit 양자화 스크립트 (저사양 GPU용)**
-
-**특징**:
-- VRAM: ~3.5GB
-- 품질: 원본의 98%
-- 용도: 개발/테스트, 저사양컴퓨터 및 Ondevice용
-
-**사용법**:
-
-```bash
-cd /home/work/tesseract/eeve/quant
-
-# 기본 실행
-python bnb_4bit.py
-
-# 커스텀 설정
-python bnb_4bit.py \
-    --model /home/work/eeve-merged-checkpoint-500 \
-    --output /home/work/tesseract/eeve/quant/eeve-bnb-4bit
-```
-
-**출력**:
-- `eeve-bnb-4bit/` (약 5.5GB)
-
----
-
-### 5. `quant/bnb_8bit.py`
-
-**8-bit 양자화 스크립트 (프로덕션용)** ⭐
-
-**특징**:
-- VRAM: ~10GB
-- 품질: 원본의 99.5%
-- 용도: 프로덕션 서비스, RTX 3060+
-
-**사용법**:
-
-```bash
-cd /home/work/tesseract/eeve/quant
-
-# 기본 실행
-python bnb_8bit.py
-
-# 커스텀 설정
-python bnb_8bit.py \
-    --model /home/work/eeve-merged-checkpoint-500 \
-    --output /home/work/tesseract/eeve/quant/eeve-bnb-8bit \
-    --threshold 6.0
-```
-
-**출력**:
-- `eeve-bnb-8bit/` (약 10.5GB)
-
----
-
-## 전체 파이프라인 실행 가이드
-
-### Step 1: 파인튜닝
-
-```bash
-# 1. 설정 확인
-vim config.py
-
-# 2. 훈련 시작
-cd /home/work/tesseract/eeve
-nohup python eeve_finetune.py > training.log 2>&1 &
-
-# 3. 진행 상황 모니터링
-tail -f training.log
-
-# 4. 훈련 상태 확인
-ps aux | grep eeve_finetune.py
-nvidia-smi
-```
-
-**예상 시간**: H100 기준 약 2-3시간 (100K 샘플, 2 epochs)
-
----
-
-### Step 2: 체크포인트 테스트
-
-```bash
-# 1. 첫 체크포인트 테스트
-python conv_eeve.py
-
-# 2. 대화 테스트
-User: 반말로 질문해도 존댓말로 답변하나요?
-Assistant: 네, 그렇습니다. 사용자께서 반말로 질문하시더라도...
-
-# 3. 여러 체크포인트 비교
-python conv_eeve.py --checkpoint /home/work/eeve-korean-output/checkpoint-500
-python conv_eeve.py --checkpoint /home/work/eeve-korean-output/checkpoint-1000
-```
-
----
-
-### Step 3: 모델 병합 (선택사항)
-
-```bash
-# LoRA 어댑터를 베이스 모델에 병합
-cd /home/work/tesseract
-
-# 병합 스크립트 실행 (필요시 별도 작성)
-# 또는 Hugging Face에 어댑터만 업로드 가능
-```
-
----
-
-### Step 4: 양자화
-
-```bash
-cd /home/work/tesseract/eeve/quant
-
-# 4-bit 양자화 (저사양용)
-python bnb_4bit.py \
-    --model /home/work/eeve-merged-checkpoint-500 \
-    --output ./eeve-bnb-4bit
-
-# 8-bit 양자화 (프로덕션용)
-python bnb_8bit.py \
-    --model /home/work/eeve-merged-checkpoint-500 \
-    --output ./eeve-bnb-8bit
-```
-
-**예상 시간**: 각 5-10분
-
----
-
-### Step 5: Hugging Face 업로드
-
-```bash
-# 양자화 모델 업로드
-cd /home/work/tesseract/eeve/quant
-
-# 4-bit 업로드
-huggingface-cli upload MyeongHo0621/eeve-vss-smh-bnb-4bit \
-    ./eeve-bnb-4bit \
-    --repo-type model
-
-# 8-bit 업로드
-huggingface-cli upload MyeongHo0621/eeve-vss-smh-bnb-8bit \
-    ./eeve-bnb-8bit \
-    --repo-type model
-```
-
----
-
-## 📊 성능 비교
-
-| 버전 | VRAM | 품질 | 속도 | 용도 |
-|------|------|------|------|------|
-| **FP16 원본** | 21GB | 100% | ⚡⚡⚡⚡ | 고사양 GPU |
-| **8-bit** ⭐ | 10GB | 99.5% | ⚡⚡⚡⚡ | 프로덕션 |
-| **4-bit** | 3.5GB | 98% | ⚡⚡⚡ | 개발/테스트 |
-
----
-
-## 🔧 문제 해결
-
-### 1. CUDA Out of Memory
-
-**문제**: 훈련 중 CUDA OOM 에러
-
-**해결**:
+**Streaming Generation:**
 ```python
-# config.py 수정
-per_device_train_batch_size = 2  # 4 → 2
-gradient_accumulation_steps = 8  # 4 → 8
-max_length = 1024  # 2048 → 1024
+from transformers import TextIteratorStreamer
+from threading import Thread
+
+streamer = TextIteratorStreamer(tokenizer, skip_special_tokens=True)
+generation_kwargs = {
+    **inputs,
+    "max_new_tokens": 512,
+    "temperature": 0.3,
+    "top_p": 0.85,
+    "streamer": streamer
+}
+
+thread = Thread(target=model.generate, kwargs=generation_kwargs)
+thread.start()
+
+for text in streamer:
+    print(text, end="", flush=True)
 ```
 
----
+### Training Details
 
-### 2. 체크포인트 로드 실패
+**Dataset Configuration:**
+- Size: Approximately 100,000 samples
+- Sources: Combination of high-quality Korean instruction datasets including KoAlpaca, Ko-Ultrachat, KoInstruct, Kullm-v2, Smol Korean Talk, and Korean Wiki QA
+- Preprocessing: Length filtering, deduplication, language verification, and special character removal
 
-**문제**: `conv_eeve.py`에서 어댑터 로드 실패
-
-**해결**:
-```bash
-# 체크포인트 경로 확인
-ls -la /home/work/eeve-korean-output/
-
-# 올바른 경로 지정
-python conv_eeve.py --checkpoint /home/work/eeve-korean-output/checkpoint-XXX
+**LoRA Configuration:**
+```yaml
+r: 128                    # Higher rank for stronger learning
+lora_alpha: 256           # alpha = 2 * r
+lora_dropout: 0.0         # No dropout (Unsloth optimization)
+target_modules:
+  - q_proj
+  - k_proj
+  - v_proj
+  - o_proj
+  - gate_proj
+  - up_proj
+  - down_proj
+bias: none
+task_type: CAUSAL_LM
+use_rslora: false
 ```
 
----
+**Training Hyperparameters:**
 
-### 3. 양자화 중 에러
+| Parameter | Value | Description |
+|-----------|-------|-------------|
+| Framework | **Unsloth** | 2-5x faster than standard transformers |
+| Epochs | 3 (stopped at 1.94) | Early stopping at optimal point |
+| Batch Size | 8 per device | Maximizing H100E memory |
+| Gradient Accumulation | 2 | Effective batch size of 16 |
+| Learning Rate | 1e-4 | Balanced learning rate |
+| Max Sequence Length | **4096** | Extended context support |
+| Warmup Ratio | 0.05 | Quick warmup |
+| Weight Decay | 0.01 | Regularization |
+| Optimizer | AdamW 8-bit (Unsloth) | Memory optimized |
+| LR Scheduler | Cosine | Smooth decay |
+| Gradient Checkpointing | Unsloth optimized | Memory efficient |
 
-**문제**: `bitsandbytes` 관련 에러
+**Checkpoint Selection Strategy:**
 
-**해결**:
-```bash
-# bitsandbytes 재설치
-pip install bitsandbytes --upgrade
+The model was trained for 3 epochs, but we selected **checkpoint-6250 (Epoch 1.94)** based on evaluation loss analysis:
 
-# CUDA 버전 확인
-nvidia-smi
-```
+| Checkpoint | Epoch | Training Loss | Eval Loss | Status |
+|-----------|-------|--------------|-----------|--------|
+| 6250 | 1.94 | 0.9986 | **1.4604** | ✅ Selected (Best) |
+| 6500 | 2.02 | 0.561 | 1.5866 | ❌ Overfitting |
 
----
+**Key Insight:** Training loss continued to decrease, but evaluation loss started increasing after checkpoint-6250, indicating overfitting. We selected the checkpoint with the **lowest evaluation loss** for optimal generalization.
 
-## 📚 관련 리소스
+**Memory Optimization:**
+- Full precision training (no 4-bit quantization needed on H100E)
+- Unsloth gradient checkpointing
+- BF16 training optimized for H100E
+- Peak VRAM usage: ~26GB during training
 
-### 배포된 모델
+**Training Infrastructure:**
+- GPU: NVIDIA H100 80GB HBM3
+- Framework: Unsloth + PyTorch 2.6, Transformers 4.46.3
+- Training time: ~3 hours (6,250 steps with Unsloth acceleration)
+- Final checkpoint: Step 6250 (Epoch 1.94), merged to full model
 
-| 모델 | 크기 | 링크 |
-|------|------|------|
-| **FP16 원본** | 21GB | [eeve-vss-smh](https://huggingface.co/MyeongHo0621/eeve-vss-smh) |
-| **8-bit** ⭐ | 10GB | [eeve-vss-smh-bnb-8bit](https://huggingface.co/MyeongHo0621/eeve-vss-smh-bnb-8bit) |
-| **4-bit** | 5.5GB | [eeve-vss-smh-bnb-4bit](https://huggingface.co/MyeongHo0621/eeve-vss-smh-bnb-4bit) |
+### Performance Examples
 
-### 데이터셋
+**Casual to Formal Korean Conversion:**
 
-| 데이터셋 | 샘플 수 | 링크 |
-|----------|---------|------|
-| **Korean Quality** | 54,190 | [korean-quality-cleaned](https://huggingface.co/datasets/MyeongHo0621/korean-quality-cleaned) |
+Input (casual Korean): "WMS가 뭐야?"
 
-### 문서
+Output (formal Korean): "WMS는 Warehouse Management System의 약자로, 창고 관리 시스템을 의미합니다. 재고 추적, 입출고 관리, 피킹, 패킹 등의 물류 프로세스를 자동화하고 최적화하는 소프트웨어 시스템입니다. 효율적인 창고 운영을 위해 사용되며, 실시간 재고 가시성과 작업 생산성 향상을 제공합니다."
 
-| 문서 | 설명 |
-|------|------|
-| `../README.md` | 프로젝트 전체 개요 |
-| `../NATURAL_LLM_STRATEGY.md` | 자연스러운 LLM 생성 전략 |
-| `../test_perform.py` | 모델 성능 평가 스크립트 |
+**Code Generation:**
 
----
+Input: "파이썬으로 리스트를 역순으로 만들어줘"
 
-## Best Practices
+Output: Provides three different Python methods for list reversal with detailed explanations of each approach, including reverse() method, slicing, and reversed() function, along with their differences.
 
-### 1. 훈련 전 체크리스트
+### Prompt Template
 
-- [ ] `config.py` 설정 확인
-- [ ] 데이터셋 경로 확인
-- [ ] GPU 메모리 확인 (`nvidia-smi`)
-- [ ] 출력 디렉토리 확인
-- [ ] 디스크 공간 확인 (최소 50GB)
-
-### 2. 효율적인 훈련
-
-```python
-# config.py 권장 설정 (H100 기준)
-per_device_train_batch_size = 4
-gradient_accumulation_steps = 4
-max_length = 2048
-num_train_epochs = 2
-learning_rate = 1e-4
-```
-
-### 3. 체크포인트 관리
-
-```bash
-# 훈련 중 주기적으로 저장 (기본: 250 steps)
-save_steps = 250
-
-# 디스크 공간 절약을 위해 오래된 체크포인트 삭제
-rm -rf /home/work/eeve-korean-output/checkpoint-{old}
-```
-
-### 4. 양자화 전략
-
-```
-개발/테스트 → 4-bit (빠른 반복)
-         ↓
-프로덕션 배포 → 8-bit (안정성 & 품질)
-         ↓
-고성능 필요 → FP16 원본
-```
-
----
-
-## 주요 특징
-
-### 1. Label Masking
-
-- 사용자 입력 부분은 loss 계산에서 제외
-- Assistant 응답만 학습
-- 더 자연스러운 대화 생성
-
-### 2. EEVE 전용 템플릿
+This model uses the standard EEVE template format:
 
 ```python
 template = """A chat between a curious user and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the user's questions.
-Human: {user_input}
-Assistant: {assistant_output}"""
+Human: {user_message}
+Assistant: """
 ```
 
----
+Using this exact template is essential for optimal performance.
 
-## 📝 참고사항
+### Recommended Generation Parameters
 
-### 시스템 요구사항
+```python
+generation_config = {
+    "max_new_tokens": 512,
+    "temperature": 0.3,
+    "top_p": 0.85,
+    "repetition_penalty": 1.0,
+    "do_sample": True,
+    "pad_token_id": tokenizer.pad_token_id,
+    "eos_token_id": tokenizer.eos_token_id,
+}
+```
 
-| 구성 요소 | 최소 사양 | 권장 사양 |
-|----------|----------|----------|
-| **GPU** | A100 (40GB) | H100 (80GB) |
-| **RAM** | 32GB | 64GB+ |
-| **Disk** | 100GB | 500GB+ |
-| **CUDA** | 11.8+ | 12.0+ |
+**Parameter Tuning Guide:**
 
-### 라이선스
+| Use Case | Temperature | Top P | Repetition Penalty | Notes |
+|----------|-------------|-------|--------------------|-------|
+| Precise answers | 0.1-0.3 | 0.8-0.9 | 1.0 | Best for factual Q&A |
+| Balanced responses | 0.5-0.7 | 0.85-0.95 | 1.0 | **Recommended default** |
+| Creative outputs | 0.8-1.0 | 0.9-1.0 | 1.05-1.1 | For creative writing |
 
-- **Base Model**: [EEVE-Korean-Instruct-10.8B](https://huggingface.co/yanolja/EEVE-Korean-Instruct-10.8B-v1.0)
-- **Training Data**: CC-BY-NC-SA-4.0
-- **Code**: MIT License
+**Important Notes on Repetition Penalty:**
+
+- **Default (1.0):** No penalty, natural repetition allowed
+- **Light (1.05-1.1):** Reduces minor repetition in creative tasks
+- **Moderate (1.1-1.2):** Good for reducing repetitive phrases
+- **Strong (1.2+):** May affect output quality, use with caution
+
+⚠️ **Warning:** Setting repetition_penalty > 1.2 can degrade Korean text quality. For this model, **1.0-1.1 is optimal** for most use cases.
+
+**Advanced Configuration Example:**
+
+```python
+# For code generation
+code_gen_config = {
+    "max_new_tokens": 1024,
+    "temperature": 0.2,
+    "top_p": 0.9,
+    "repetition_penalty": 1.0,
+    "do_sample": True,
+}
+
+# For conversational responses
+conversation_config = {
+    "max_new_tokens": 512,
+    "temperature": 0.7,
+    "top_p": 0.9,
+    "repetition_penalty": 1.05,
+    "do_sample": True,
+}
+
+# For precise factual answers
+factual_config = {
+    "max_new_tokens": 256,
+    "temperature": 0.1,
+    "top_p": 0.85,
+    "repetition_penalty": 1.0,
+    "do_sample": True,
+}
+```
+
+### Limitations
+
+This model has been released for research and educational purposes. Commercial use requires compliance with the CC-BY-NC-SA-4.0 license. While optimized for Korean language, the model provides partial support for other languages. Performance may improve with additional training beyond checkpoint 500.
+
+### License
+
+- Model License: CC-BY-NC-SA-4.0
+- Base Model: Complies with [EEVE-Korean-Instruct-10.8B-v1.0](https://huggingface.co/yanolja/EEVE-Korean-Instruct-10.8B-v1.0) license
+- Commercial Use: Restricted (refer to license)
 
 ### Citation
 
 ```bibtex
-@misc{eeve-vss-smh-2025,
+@misc{eeve-vss-smh-2024,
   author = {MyeongHo0621},
-  title = {EEVE-VSS-SMH: Fine-tuned EEVE for Korean Instructions},
-  year = {2025},
+  title = {EEVE-VSS-SMH: Korean Custom Fine-tuned Model},
+  year = {2024},
   publisher = {Hugging Face},
-  howpublished = {\url{https://huggingface.co/MyeongHo0621/eeve-vss-smh}}
+  howpublished = {\url{https://huggingface.co/MyeongHo0621/eeve-vss-smh}},
+  note = {LoRA fine-tuned and merged model based on EEVE-Korean-Instruct-10.8B-v1.0}
 }
 ```
 
+### Acknowledgments
+
+- Base Model: [Yanolja](https://huggingface.co/yanolja) - EEVE-Korean-Instruct-10.8B-v1.0
+- Training Infrastructure: KT Cloud H100E
+- Framework: Hugging Face Transformers, PEFT
+
+### Contact
+
+- GitHub: [MyeongHo0621](https://github.com/MyeongHo0621)
+- Model Repository: [tesseract](https://github.com/MyeongHo0621/tuned_solar)
+
 ---
 
-## Attribute
+## 한국어 문서
 
-이슈 및 개선 제안은 GitHub 또는 Hugging Face를 통해 제출해주세요.
+### 모델 소개
+
+이 모델은 [EEVE-Korean-Instruct-10.8B-v1.0](https://huggingface.co/yanolja/EEVE-Korean-Instruct-10.8B-v1.0)을 베이스로, 고품질 한국어 instruction 데이터로 LoRA 파인튜닝한 후 병합한 모델입니다.
+
+**주요 특징:**
+- 100K+ 고품질 instruction 데이터로 훈련된 한국어 처리 능력
+- 최대 8K 토큰까지 확장된 문맥 지원
+- 한국어와 영어를 모두 지원하는 이중언어 기능
+
+### 빠른 시작
+
+**설치:**
+```bash
+pip install transformers torch accelerate
+```
+
+**기본 사용:**
+```python
+from transformers import AutoModelForCausalLM, AutoTokenizer
+
+# 모델 로드 (PEFT 불필요)
+model = AutoModelForCausalLM.from_pretrained(
+    "MyeongHo0621/eeve-vss-smh",  
+    device_map="auto",
+    torch_dtype="auto"
+)
+tokenizer = AutoTokenizer.from_pretrained("MyeongHo0621/eeve-vss-smh")
+
+# 프롬프트 템플릿 (EEVE 형식)
+def create_prompt(user_input):
+    return f"""A chat between a curious user and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the user's questions.
+Human: {user_input}
+Assistant: """
+
+# 응답 생성
+user_input = "파이썬으로 피보나치 수열 구현해줘"
+prompt = create_prompt(user_input)
+
+inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
+outputs = model.generate(
+    **inputs,
+    max_new_tokens=512,
+    temperature=0.3,
+    top_p=0.85,
+    repetition_penalty=1.0,
+    do_sample=True
+)
+
+response = tokenizer.decode(outputs[0][inputs['input_ids'].shape[1]:], skip_special_tokens=True)
+print(response)
+```
+
+**스트리밍 생성:**
+```python
+from transformers import TextIteratorStreamer
+from threading import Thread
+
+streamer = TextIteratorStreamer(tokenizer, skip_special_tokens=True)
+generation_kwargs = {
+    **inputs,
+    "max_new_tokens": 512,
+    "temperature": 0.3,
+    "top_p": 0.85,
+    "streamer": streamer
+}
+
+thread = Thread(target=model.generate, kwargs=generation_kwargs)
+thread.start()
+
+for text in streamer:
+    print(text, end="", flush=True)
+```
+
+### 훈련 세부사항
+
+**데이터셋 구성:**
+- 크기: 약 100,000개 샘플
+- 출처: KoAlpaca, Ko-Ultrachat, KoInstruct, Kullm-v2, Smol Korean Talk, Korean Wiki QA 등 고품질 한국어 instruction 데이터셋 조합
+- 전처리: 길이 필터링, 중복 제거, 언어 확인, 특수문자 제거
+
+**LoRA 설정:**
+```yaml
+r: 128                    # 더 높은 rank (강력한 학습)
+lora_alpha: 256           # alpha = 2 * r
+lora_dropout: 0.0         # Dropout 없음 (Unsloth 최적화)
+target_modules:
+  - q_proj
+  - k_proj
+  - v_proj
+  - o_proj
+  - gate_proj
+  - up_proj
+  - down_proj
+bias: none
+task_type: CAUSAL_LM
+use_rslora: false
+```
+
+**훈련 하이퍼파라미터:**
+
+| 파라미터 | 값 | 설명 |
+|---------|-----|------|
+| 프레임워크 | **Unsloth** | 기존 대비 2-5배 빠른 훈련 |
+| Epochs | 3 (1.94에서 중단) | 최적 지점에서 조기 종료 |
+| Batch Size | 8 per device | H100E 메모리 최대 활용 |
+| Gradient Accumulation | 2 | 실질적 배치 크기 16 |
+| Learning Rate | 1e-4 | 균형잡힌 학습률 |
+| Max Sequence Length | **4096** | 확장된 문맥 지원 |
+| Warmup Ratio | 0.05 | 빠른 워밍업 |
+| Weight Decay | 0.01 | 정규화 |
+| Optimizer | AdamW 8-bit (Unsloth) | 메모리 최적화 |
+| LR Scheduler | Cosine | 부드러운 감소 |
+| Gradient Checkpointing | Unsloth 최적화 | 메모리 효율 |
+
+**체크포인트 선택 전략:**
+
+3 epoch 훈련을 진행했지만, 평가 손실(evaluation loss) 분석을 통해 **checkpoint-6250 (Epoch 1.94)**을 선택했습니다:
+
+| 체크포인트 | Epoch | Training Loss | Eval Loss | 상태 |
+|-----------|-------|--------------|-----------|------|
+| 6250 | 1.94 | 0.9986 | **1.4604** | ✅ 선택 (최적) |
+| 6500 | 2.02 | 0.561 | 1.5866 | ❌ 과적합 |
+
+**핵심 인사이트:** Training loss는 계속 감소했지만, checkpoint-6250 이후 evaluation loss가 증가하기 시작했습니다. 이는 과적합의 신호입니다. **가장 낮은 evaluation loss**를 가진 체크포인트를 선택하여 최적의 일반화 성능을 확보했습니다.
+
+**메모리 최적화:**
+- Full precision 훈련 (H100E에서 4-bit 양자화 불필요)
+- Unsloth gradient checkpointing
+- H100E 최적화 BF16 훈련
+- 훈련 중 Peak VRAM 사용량: ~26GB
+
+**훈련 환경:**
+- GPU: NVIDIA H100 80GB HBM3
+- 프레임워크: Unsloth + PyTorch 2.6, Transformers 4.46.3
+- 훈련 시간: ~3시간 (Unsloth 가속으로 6,250 steps)
+- 최종 체크포인트: Step 6250 (Epoch 1.94), 전체 모델로 병합
+
+### 성능 예시
+
+**반말에서 존댓말 변환:**
+
+입력 (반말): "WMS가 뭐야?"
+
+출력 (존댓말): "WMS는 Warehouse Management System의 약자로, 창고 관리 시스템을 의미합니다. 재고 추적, 입출고 관리, 피킹, 패킹 등의 물류 프로세스를 자동화하고 최적화하는 소프트웨어 시스템입니다. 효율적인 창고 운영을 위해 사용되며, 실시간 재고 가시성과 작업 생산성 향상을 제공합니다."
+
+**코드 생성:**
+
+입력: "파이썬으로 리스트를 역순으로 만들어줘"
+
+출력: reverse() 메서드, 슬라이싱, reversed() 함수 등 세 가지 파이썬 리스트 역순 변환 방법을 각 접근법의 차이점과 함께 상세히 설명합니다.
+
+### 프롬프트 템플릿
+
+이 모델은 표준 EEVE 템플릿 형식을 사용합니다:
+
+```python
+template = """A chat between a curious user and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the user's questions.
+Human: {user_message}
+Assistant: """
+```
+
+최적의 성능을 위해서는 이 템플릿을 정확히 사용하는 것이 필수적입니다.
+
+### 권장 생성 파라미터
+
+```python
+generation_config = {
+    "max_new_tokens": 512,
+    "temperature": 0.3,
+    "top_p": 0.85,
+    "repetition_penalty": 1.0,
+    "do_sample": True,
+    "pad_token_id": tokenizer.pad_token_id,
+    "eos_token_id": tokenizer.eos_token_id,
+}
+```
+
+**파라미터 조정 가이드:**
+
+| 용도 | Temperature | Top P | Repetition Penalty | 비고 |
+|------|-------------|-------|--------------------|------|
+| 정확한 답변 | 0.1-0.3 | 0.8-0.9 | 1.0 | 사실 기반 Q&A에 최적 |
+| 균형잡힌 답변 | 0.5-0.7 | 0.85-0.95 | 1.0 | **권장 기본값** |
+| 창의적 답변 | 0.8-1.0 | 0.9-1.0 | 1.05-1.1 | 창작 글쓰기용 |
+
+**Repetition Penalty 중요 참고사항:**
+
+- **기본값 (1.0):** 페널티 없음, 자연스러운 반복 허용
+- **약함 (1.05-1.1):** 창작 작업에서 미세한 반복 감소
+- **중간 (1.1-1.2):** 반복적인 구문 감소에 효과적
+- **강함 (1.2+):** 출력 품질 저하 가능, 주의해서 사용
+
+⚠️ **주의:** repetition_penalty를 1.2 이상으로 설정하면 한국어 텍스트 품질이 저하될 수 있습니다. 이 모델의 경우 대부분의 사용 사례에서 **1.0-1.1이 최적**입니다.
+
+**고급 설정 예시:**
+
+```python
+# 코드 생성용
+code_gen_config = {
+    "max_new_tokens": 1024,
+    "temperature": 0.2,
+    "top_p": 0.9,
+    "repetition_penalty": 1.0,
+    "do_sample": True,
+}
+
+# 대화형 응답용
+conversation_config = {
+    "max_new_tokens": 512,
+    "temperature": 0.7,
+    "top_p": 0.9,
+    "repetition_penalty": 1.05,
+    "do_sample": True,
+}
+
+# 정확한 사실 답변용
+factual_config = {
+    "max_new_tokens": 256,
+    "temperature": 0.1,
+    "top_p": 0.85,
+    "repetition_penalty": 1.0,
+    "do_sample": True,
+}
+```
+
+### 제한사항
+
+이 모델은 연구 및 교육 목적으로 공개되었습니다. 상업적 사용 시 CC-BY-NC-SA-4.0 라이선스를 준수해야 합니다. 한국어에 최적화되어 있으나 다른 언어도 부분적으로 지원합니다. checkpoint-500 기준으로 추가 훈련 시 성능이 향상될 수 있습니다.
+
+### 라이선스
+
+- 모델 라이선스: CC-BY-NC-SA-4.0
+- 베이스 모델: [EEVE-Korean-Instruct-10.8B-v1.0](https://huggingface.co/yanolja/EEVE-Korean-Instruct-10.8B-v1.0) 라이선스 준수
+- 상업적 사용: 제한적 (라이선스 참조)
+
+### 인용
+
+```bibtex
+@misc{eeve-vss-smh-2024,
+  author = {MyeongHo0621},
+  title = {EEVE-VSS-SMH: Korean Custom Fine-tuned Model},
+  year = {2024},
+  publisher = {Hugging Face},
+  howpublished = {\url{https://huggingface.co/MyeongHo0621/eeve-vss-smh}},
+  note = {LoRA fine-tuned and merged model based on EEVE-Korean-Instruct-10.8B-v1.0}
+}
+```
+
+### 감사의 글
+
+- 베이스 모델: [Yanolja](https://huggingface.co/yanolja) - EEVE-Korean-Instruct-10.8B-v1.0
+- 훈련 인프라: KT Cloud H100E
+- 프레임워크: Hugging Face Transformers, PEFT
+
+### 연락처
+
+- **Github** : [tuned_solar](https://github.com/EnzoMH/tuned_solar/tree/main/eeve)
 
 ---
 
-**Last Updated**: 2025-10-11  
-**Version**: 1.0  
-**Status**: Production-Ready 
-
+**Last Updated**: 2025-10-12  
+**Checkpoint**: 6250 steps (Epoch 1.94)  
+**Training Method**: Unsloth (2-5x faster)  
+**Selection Criteria**: Lowest Evaluation Loss (1.4604)  
+**Status**: Merged & Ready for Deployment
