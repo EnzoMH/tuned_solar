@@ -40,3 +40,32 @@ solar-korean-output/*/rng_state.pth
 # 로그 파일
 *.log
 logs/
+
+# NFS temporary files
+.nfs*
+
+# Large datasets (regeneratable)
+korean_large_data/
+korean_quality_data/
+
+# Vector database storage
+faiss_storage/
+
+# Generated instruction data
+datageneration/Instruction/data/
+datageneration/Instruction/datasets/
+
+# Training outputs
+*-output/
+*.log
+training*.log
+
+# Model checkpoints (large files)
+checkpoint-*/
+final/
+
+# Environment files
+.env
+*.pid
+
+.nfs*
