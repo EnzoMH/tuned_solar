@@ -129,9 +129,9 @@ User: quit  # 종료
 **4-bit 양자화 스크립트 (저사양 GPU용)**
 
 **특징**:
-- 💾 VRAM: ~3.5GB
-- 📊 품질: 원본의 98%
-- 🎯 용도: 개발/테스트, GTX 1660 등
+- VRAM: ~3.5GB
+- 품질: 원본의 98%
+- 용도: 개발/테스트, 저사양컴퓨터 및 Ondevice용
 
 **사용법**:
 
@@ -157,9 +157,9 @@ python bnb_4bit.py \
 **8-bit 양자화 스크립트 (프로덕션용)** ⭐
 
 **특징**:
-- 💾 VRAM: ~10GB
-- 📊 품질: 원본의 99.5%
-- 🎯 용도: 프로덕션 서비스, RTX 3060+
+- VRAM: ~10GB
+- 품질: 원본의 99.5%
+- 용도: 프로덕션 서비스, RTX 3060+
 
 **사용법**:
 
@@ -181,7 +181,7 @@ python bnb_8bit.py \
 
 ---
 
-## 🎯 전체 파이프라인 실행 가이드
+## 전체 파이프라인 실행 가이드
 
 ### Step 1: 파인튜닝
 
@@ -355,7 +355,7 @@ nvidia-smi
 
 ---
 
-## 💡 Best Practices
+## Best Practices
 
 ### 1. 훈련 전 체크리스트
 
@@ -398,22 +398,15 @@ rm -rf /home/work/eeve-korean-output/checkpoint-{old}
 
 ---
 
-## 🎯 주요 특징
+## 주요 특징
 
-### 1. 반말 질문 → 존댓말 답변
-
-```
-User: WMS가 뭐야?
-Assistant: WMS(Warehouse Management System)는 창고 관리 시스템입니다...
-```
-
-### 2. Label Masking
+### 1. Label Masking
 
 - 사용자 입력 부분은 loss 계산에서 제외
 - Assistant 응답만 학습
 - 더 자연스러운 대화 생성
 
-### 3. EEVE 전용 템플릿
+### 2. EEVE 전용 템플릿
 
 ```python
 template = """A chat between a curious user and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the user's questions.
@@ -454,7 +447,7 @@ Assistant: {assistant_output}"""
 
 ---
 
-## 🤝 기여
+## Attribute
 
 이슈 및 개선 제안은 GitHub 또는 Hugging Face를 통해 제출해주세요.
 
@@ -462,5 +455,5 @@ Assistant: {assistant_output}"""
 
 **Last Updated**: 2025-10-11  
 **Version**: 1.0  
-**Status**: Production-Ready ✅
+**Status**: Production-Ready 
 
