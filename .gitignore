@@ -5,6 +5,13 @@ __pycache__/
 *.pyc
 *.pyo
 
+# Virtual environments
+venv/
+venv_*/
+env/
+ENV/
+.venv
+
 # Jupyter Notebook
 .ipynb_checkpoints/
 
@@ -59,6 +66,12 @@ datageneration/Instruction/datasets/
 *-output/
 *.log
 training*.log
+
+# Quantized models (large files)
+*-awq-*/
+*-gptq-*/
+eeve-awq-4bit/
+eeve-gptq-4bit/
 
 # Model checkpoints (large files)
 checkpoint-*/
