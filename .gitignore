@@ -84,3 +84,6 @@ final/
 .nfs*
 
 INFERENCE_OPTIMIZATION_PLAN.md
+/test/
+
+.json*
