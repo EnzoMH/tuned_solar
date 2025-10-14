@@ -81,9 +81,20 @@ final/
 .env
 *.pid
 
+# NFS temporary files
 .nfs*
 
+# JSON files (except specific configs)
+*.json
+*.jsonl
+
+# Markdown files (except README)
+*.md
+!README.md
+!qwen/README.md 
+!instruction/README.md
+!datageneration/inst_eeve/README.md
+
+# Temporary/Test files
 INFERENCE_OPTIMIZATION_PLAN.md
 /test/
-
-.json*
