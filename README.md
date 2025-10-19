@@ -286,7 +286,6 @@ labels[labels == pad_token_id] = -100  # 패딩 마스킹
 ## Acknowledgments
 
 - **[Yanolja (EEVE Team)](https://huggingface.co/yanolja)**: EEVE-Korean-Instruct-10.8B 베이스 모델
-- **[LG AI Research (EXAONE)](https://huggingface.co/LGAI-EXAONE)**: EXAONE 토크나이저 (EEVE에 통합)
 - **[Upstage](https://huggingface.co/upstage)**: SOLAR-10.7B 기반 모델
 - **KT Cloud**: H100E GPU 인프라 제공
 - **Hugging Face**: Transformers, PEFT, Datasets 라이브러리
